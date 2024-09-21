@@ -101,11 +101,11 @@ class Radar:
         start_angle_rad = math.radians(self.angle - self.beamwidth / 2)
         end_angle_rad = math.radians(self.angle + self.beamwidth / 2)
 
-        num_segments = 100
+        num_segments = 50
         segment_angle = (end_angle_rad - start_angle_rad) / num_segments
 
         for i in range(num_segments):
-            alpha_value = max(0, 255 - (i * (255 // num_segments)))
+            alpha_value = max(0, (i * (255 // num_segments)))
 
             points = [self.center]
 
