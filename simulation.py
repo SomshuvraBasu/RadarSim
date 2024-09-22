@@ -1,7 +1,7 @@
 import pygame
-from radar import Radar
-from objects import Aircraft, Ship
 import random
+import math
+from radar import Radar
 
 # Initialize pygame
 pygame.init()
@@ -17,18 +17,18 @@ clock = pygame.time.Clock()
 # Radar setup
 radar = Radar(center=(WIDTH // 2, HEIGHT // 2), range_radius=300, beamwidth=45, sweep_speed=1, pt=1.0, g=30, frequency=10e9)
 
-# Create initial radar targets
-targets = [
-    Aircraft(speed_kmph=180, heading=45, rcs=1),  # Aircraft moving at 180 km/h
-    Ship(speed_kmph=10, heading=90, rcs=5),  # Stationary ship
-    Ship(speed_kmph=15, heading=0, rcs=50)  # Stationary ship 2
-]
+# Generate random targets
+def generate_random_targets(num_targets=10):
+    targets = []
+    for _ in range(num_targets):
+        position = (random.randint(100, 700), random.randint(100, 700))
+        speed = 0.1
+        heading = random.uniform(0, 360)
+        targets.append({'position': list(position), 'rcs': random.uniform(1, 10), 'speed': speed, 'heading': heading})
+    return targets
 
-# Function to add new targets randomly
-def add_new_target():
-    if random.random() < 0.05:  # 5% chance to add a new target each frame
-        new_target = Aircraft(speed_kmph=random.randint(100, 300), heading=random.randint(0, 360), rcs=random.randint(1, 10))
-        targets.append(new_target)
+# Initialize targets
+targets = generate_random_targets()
 
 # Main loop
 running = True
@@ -37,23 +37,28 @@ while running:
         if event.type == pygame.QUIT:
             running = False
 
-    # Update radar sweep angle and illuminate targets
-    radar.update_sweep(targets)
-
-    # Move objects
+    # Update target positions
     for target in targets:
-        target.move()
+        speed = target['speed']
+        heading = target['heading']
+        dx = speed * math.cos(math.radians(heading))
+        dy = speed * math.sin(math.radians(heading))
+        # Update position while keeping it within bounds
+        target['position'][0] = min(max(target['position'][0] + dx, 0), WIDTH)
+        target['position'][1] = min(max(target['position'][1] + dy, 0), HEIGHT)
 
-    # Add new targets
-    add_new_target()
+    # Update radar sweep angle
+    radar.update_sweep()
+
+    # Detect targets by simulating collision
+    radar.detect_collision(targets)
 
     # Draw radar and sweep
     radar.draw_radar(screen)
     radar.draw_sweep(screen)
 
-    # Detect and draw targets
-    for target in targets:
-        radar.draw_target_blip(screen, target)
+    # Draw persistent blips from previous sweeps
+    radar.draw_blips(screen)
 
     # Update display
     pygame.display.flip()

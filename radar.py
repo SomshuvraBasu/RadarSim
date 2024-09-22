@@ -13,21 +13,23 @@ class Radar:
         self.wavelength = 3e8 / self.frequency
         self.angle = 0
         self.trail_surface = pygame.Surface((800, 800), pygame.SRCALPHA)
-        self.illuminated_targets = set()  # Keep track of illuminated target positions
 
-    def calculate_response(self, target):
-        target_pos = target.get_position()
-        distance = math.sqrt((target_pos[0] - self.center[0]) ** 2 + (target_pos[1] - self.center[1]) ** 2)
+        # Dictionary to store detected blips (positions) and RCS values
+        self.blips = {}
 
+    def calculate_response(self, target_position, rcs):
+        """Calculate the received power from a target."""
+        distance = math.sqrt((target_position[0] - self.center[0]) ** 2 + (target_position[1] - self.center[1]) ** 2)
+        
         if distance == 0 or distance > self.range_radius:
             return 0, 0
 
-        power_received = (self.pt * self.g**2 * (self.wavelength**2) * target.rcs) / ((4 * math.pi)**3 * (distance**4))
+        power_received = (self.pt * self.g**2 * (self.wavelength**2) * rcs) / ((4 * math.pi)**3 * (distance**4))
         return power_received, distance
 
-    def is_target_within_beam(self, target):
-        target_pos = target.get_position()
-        target_angle = math.degrees(math.atan2(target_pos[1] - self.center[1], target_pos[0] - self.center[0])) % 360
+    def is_within_beam(self, target_position):
+        """Check if a given position is within the current radar beam."""
+        target_angle = math.degrees(math.atan2(target_position[1] - self.center[1], target_position[0] - self.center[0])) % 360
 
         beam_start_angle = (self.angle - self.beamwidth / 2) % 360
         beam_end_angle = (self.angle + self.beamwidth / 2) % 360
@@ -37,45 +39,34 @@ class Radar:
         else:
             return target_angle >= beam_start_angle or target_angle <= beam_end_angle
 
-    def update_illuminated_targets(self, targets):
-        """ Update illuminated targets based on the current sweep. """
-        # Track current positions of targets
-        current_positions = {target.get_position() for target in targets}
-
-        # Check which targets are newly illuminated
+    def detect_collision(self, targets):
+        """Simulate a radar collision detection based on beam and target position."""
+        new_blips = {}  # Temporary storage for new blips
+        
         for target in targets:
-            if self.is_target_within_beam(target):
-                power_received, _ = self.calculate_response(target)
+            target_position = tuple(target['position'])  # Convert to tuple for hashing
+            rcs = target['rcs']
+
+            if self.is_within_beam(target_position):
+                power_received, distance = self.calculate_response(target_position, rcs)
+
                 if power_received > 0:
-                    self.illuminated_targets.add(target.get_position())  # Keep track of illuminated targets
+                    new_blips[target_position] = rcs  # Store the detected blip with RCS
 
-        # Remove targets that are no longer within the beam
-        self.illuminated_targets.intersection_update(current_positions)  # Keep only positions of currently active targets
+        # Update blips to include only new blips, keeping the previous ones that were not cleared
+        self.blips.update(new_blips)  # Merge new blips with existing ones
 
-    def draw_target_blip(self, screen, target):
-        """ Draws the blip for a detected target. """
-        if target.get_position() in self.illuminated_targets:
-            power_received, distance = self.calculate_response(target)
 
-            if power_received > 0:
-                rcs_estimated = (power_received * ((4 * math.pi)**3 * (distance**4))) / (self.pt * self.g**2 * (self.wavelength**2))
-                min_size = 5
-                max_size = 50
-                normalized_rcs = max(min(rcs_estimated / 100, 1), 0)
-                blip_size = min_size + (max_size - min_size) * normalized_rcs
 
-                x, y = target.get_position()
-                pygame.draw.circle(screen, (0, 255, 0), (int(x), int(y)), int(blip_size))
 
-    def update_sweep(self, targets):
-        """ Updates the radar sweep angle and illuminated targets. """
+    def update_sweep(self):
+        """Updates the radar sweep angle."""
         self.angle += self.sweep_speed
         if self.angle >= 360:
             self.angle = 0
-        self.update_illuminated_targets(targets)  # Update illuminated targets after sweeping
 
     def draw_radar(self, screen):
-        """ Draws the radar background with concentric circles and radial lines. """
+        """Draws the radar background with concentric circles and radial lines."""
         screen.fill((0, 0, 0))  # Black background
         
         for i in range(1, 11):  # 10 concentric circles
@@ -94,7 +85,7 @@ class Radar:
             screen.blit(text, (text_x - text.get_width() // 2, text_y - text.get_height() // 2))
 
     def draw_sweep(self, screen):
-        """ Draws the radar sweeping beam as a fading sector with intensity gradient. """
+        """Draws the radar sweeping beam."""
         self.trail_surface.fill((0, 0, 0, 0))  # Transparent background
 
         sweep_angle_rad = math.radians(self.angle)
@@ -119,3 +110,15 @@ class Radar:
             pygame.draw.polygon(self.trail_surface, (0, 255, 0, alpha_value), points)
 
         screen.blit(self.trail_surface, (0, 0))
+
+    def draw_blips(self, screen):
+        """Draws persistent blips detected in previous sweeps."""
+        min_size = 5
+        max_size = 50
+
+        for position, rcs in self.blips.items():
+            # Normalize RCS for size
+            normalized_rcs = max(min(rcs / 100, 1), 0)
+            blip_size = min_size + (max_size - min_size) * normalized_rcs
+
+            pygame.draw.circle(screen, (0, 255, 0), (int(position[0]), int(position[1])), int(blip_size))
