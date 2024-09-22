@@ -1,38 +1,52 @@
 import math
 import pygame
+from physics import calculateFSPL, calculateReceivedPower, calculateNoisePower, calculateSNR, calculateJammingEffect
 
 class Radar:
-    def __init__(self, center, range_radius, beamwidth, sweep_speed, pt=1.0, g=30, frequency=10e9):
+    def __init__(self, center, range_radius, beamwidth, sweep_speed, pt=1.0, gain_transmit=30, gain_recieve=30, frequency=10e9, noise_figure=5):
         self.center = center
         self.range_radius = range_radius
         self.beamwidth = beamwidth
         self.sweep_speed = sweep_speed
         self.pt = pt
-        self.g = 10 ** (g / 10)
+        self.g_transmit = 10 ** (gain_transmit / 10)
+        self.g_recieve = 10 ** (gain_recieve / 10)
         self.frequency = frequency
         self.wavelength = 3e8 / self.frequency
         self.angle = 0
+        self.elevation = 0
         self.trail_surface = pygame.Surface((800, 800), pygame.SRCALPHA)
-        
-        # Dictionary to store current blips
         self.blips = {}
-        # Set to keep track of angles that have been swept in the current cycle
         self.swept_angles = set()
+        self.noise_figure = noise_figure
+        self.k = 1.38e-23  # Boltzmann constant
+        self.t0 = 290  # Standard temperature in Kelvin
 
-    def calculate_response(self, target_position, rcs):
-        """Calculate the received power from a target."""
-        distance = math.sqrt((target_position[0] - self.center[0]) ** 2 + (target_position[1] - self.center[1]) ** 2)
+    def calculateResponse(self, target):
+        """Calculate the received power and SNR from a target."""
+        distance = math.sqrt((target['position'][0] - self.center[0])**2 + (target['position'][1] - self.center[1])**2)
         
         if distance == 0 or distance > self.range_radius:
-            return 0, 0
+            return 0, -float('inf')  # Return 0 power and -inf SNR for out of range targets
 
-        power_received = (self.pt * self.g**2 * (self.wavelength**2) * rcs) / ((4 * math.pi)**3 * (distance**4))
-        return power_received, distance
+        path_loss = calculateFSPL(distance, self.frequency)
+        received_power = calculateReceivedPower(self.pt, self.g_transmit, self.g_recieve, self.wavelength, target['rcs'], distance)
+        
+        # Calculate noise power
+        noise_power = calculateNoisePower(self.noise_figure, self.k, self.t0, self.frequency)
+        
+        # Calculate SNR
+        snr = calculateSNR(received_power, noise_power)
+        
+        # Apply jamming effect if present
+        if 'jamming_power' in target:
+            received_power *= calculateJammingEffect(received_power, target['jamming_power'])
+
+        return received_power, snr
 
     def is_within_beam(self, target_position):
         """Check if a given position is within the current radar beam."""
         target_angle = math.degrees(math.atan2(target_position[1] - self.center[1], target_position[0] - self.center[0])) % 360
-
         beam_start_angle = (self.angle - self.beamwidth / 2) % 360
         beam_end_angle = (self.angle + self.beamwidth / 2) % 360
 
@@ -42,36 +56,29 @@ class Radar:
             return target_angle >= beam_start_angle or target_angle <= beam_end_angle
 
     def detect_and_update_targets(self, targets):
-        """Detect targets within the current beam and update blips immediately."""
-        # Determine the range of angles covered by this sweep
+        """Detect targets within the current beam and update blips."""
         start_angle = (self.angle - self.beamwidth / 2) % 360
         end_angle = (self.angle + self.beamwidth / 2) % 360
 
-        # Add these angles to the swept angles set
         for angle in range(int(start_angle), int(end_angle) + 1):
             self.swept_angles.add(angle % 360)
 
-        # Check for targets within the beam
         detected_positions = set()
         for target in targets:
             target_position = tuple(map(int, target['position']))
-            rcs = target['rcs']
 
             if self.is_within_beam(target_position):
-                power_received, _ = self.calculate_response(target_position, rcs)
+                power_received, snr = self.calculateResponse(target)
                 if power_received > 0:
-                    self.blips[target_position] = rcs
+                    self.blips[target_position] = (power_received, snr)
                     detected_positions.add(target_position)
 
-        # Remove blips that are within the current sweep but not detected
         for position in list(self.blips.keys()):
-            blip_angle = math.degrees(math.atan2(position[1] - self.center[1], position[0] - self.center[0])) % 360
             if self.is_within_beam(position) and position not in detected_positions:
                 del self.blips[position]
 
-        # Check if a full sweep has been completed
         if len(self.swept_angles) == 360:
-            self.swept_angles.clear()  # Reset for the next sweep
+            self.swept_angles.clear()
 
     def update_sweep(self):
         """Updates the radar sweep angle."""
@@ -125,7 +132,27 @@ class Radar:
 
     def draw_blips(self, screen):
         """Draws the current blips on the screen."""
-        for position, rcs in self.blips.items():
-            # Normalize RCS for blip size (adjust as needed)
-            blip_size = max(3, min(10, int(rcs)))
-            pygame.draw.circle(screen, (255, 255, 0), position, blip_size)
+        for position, (power, snr) in self.blips.items():
+            # Use power to determine blip size
+            # You might want to adjust this calculation based on your specific needs
+            
+            blip_size = max(6, min(12, int(power*1e18 / self.pt)))  # Normalize by transmit power
+            
+            # # Use SNR to determine blip color
+            # color_value = abs(255-max(0, min(255, 128+int((snr-100)*3))))  # Adjust these values as needed
+            # blip_color = (255, color_value, 0)  # Red to Yellow
+
+            blip_color = (0, 255, 0)  # Yellow
+            
+            pygame.draw.circle(screen, blip_color, position, blip_size)
+            #add text to show distance
+            distance = pygame.font.SysFont(None, 24).render(str(int(math.sqrt((position[0] - self.center[0])**2 + (position[1] - self.center[1])**2))), True, (0, 255, 0))
+            screen.blit(distance, (position[0], position[1] + 15))
+
+            # Use this to display target type in future by implementing a target classifcation algorithm
+            if(blip_size > 9):
+                type_of_target = pygame.font.SysFont(None, 24).render("Ship", True, (0, 255, 0))
+                screen.blit(type_of_target, (position[0]+10, position[1] - 15))
+            else:
+                type_of_target = pygame.font.SysFont(None, 24).render("A/C", True, (0, 255, 0))
+                screen.blit(type_of_target, (position[0]+10, position[1] - 15))
