@@ -13,9 +13,13 @@ class Radar:
         self.wavelength = 3e8 / self.frequency
         self.angle = 0
         self.trail_surface = pygame.Surface((800, 800), pygame.SRCALPHA)
-
-        # Dictionary to store detected blips (positions) and RCS values
-        self.blips = {}
+        
+        # Dictionary to store current blips
+        self.current_blips = {}
+        # Dictionary to store new blips detected in the ongoing sweep
+        self.new_blips = {}
+        # Flag to indicate if a full sweep has been completed
+        self.sweep_completed = False
 
     def calculate_response(self, target_position, rcs):
         """Calculate the received power from a target."""
@@ -39,31 +43,31 @@ class Radar:
         else:
             return target_angle >= beam_start_angle or target_angle <= beam_end_angle
 
-    def detect_collision(self, targets):
-        """Simulate a radar collision detection based on beam and target position."""
-        new_blips = {}  # Temporary storage for new blips
-        
+    def detect_targets(self, targets):
+        """Detect targets within the current beam."""
         for target in targets:
-            target_position = tuple(target['position'])  # Convert to tuple for hashing
+            target_position = tuple(map(int, target['position']))  # Convert to integer tuple for precise positioning
             rcs = target['rcs']
 
             if self.is_within_beam(target_position):
-                power_received, distance = self.calculate_response(target_position, rcs)
+                power_received, _ = self.calculate_response(target_position, rcs)
 
                 if power_received > 0:
-                    new_blips[target_position] = rcs  # Store the detected blip with RCS
-
-        # Update blips to include only new blips, keeping the previous ones that were not cleared
-        self.blips.update(new_blips)  # Merge new blips with existing ones
-
-
-
+                    self.new_blips[target_position] = rcs
 
     def update_sweep(self):
-        """Updates the radar sweep angle."""
+        """Updates the radar sweep angle and checks for sweep completion."""
         self.angle += self.sweep_speed
         if self.angle >= 360:
             self.angle = 0
+            self.sweep_completed = True
+
+    def update_blips(self):
+        """Update blips after a full sweep."""
+        if self.sweep_completed:
+            self.current_blips = self.new_blips
+            self.new_blips = {}
+            self.sweep_completed = False
 
     def draw_radar(self, screen):
         """Draws the radar background with concentric circles and radial lines."""
@@ -112,13 +116,8 @@ class Radar:
         screen.blit(self.trail_surface, (0, 0))
 
     def draw_blips(self, screen):
-        """Draws persistent blips detected in previous sweeps."""
-        min_size = 5
-        max_size = 50
-
-        for position, rcs in self.blips.items():
-            # Normalize RCS for size
-            normalized_rcs = max(min(rcs / 100, 1), 0)
-            blip_size = min_size + (max_size - min_size) * normalized_rcs
-
-            pygame.draw.circle(screen, (0, 255, 0), (int(position[0]), int(position[1])), int(blip_size))
+        """Draws the current blips on the screen."""
+        for position, rcs in self.current_blips.items():
+            # Normalize RCS for blip size (adjust as needed)
+            blip_size = max(3, min(10, int(rcs)))
+            pygame.draw.circle(screen, (255, 255, 0), position, blip_size)

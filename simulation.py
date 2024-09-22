@@ -50,14 +50,15 @@ while running:
     # Update radar sweep angle
     radar.update_sweep()
 
-    # Detect targets by simulating collision
-    radar.detect_collision(targets)
+    # Detect targets within the current beam
+    radar.detect_targets(targets)
 
-    # Draw radar and sweep
+    # Update blips if a full sweep is completed
+    radar.update_blips()
+
+    # Draw radar elements
     radar.draw_radar(screen)
     radar.draw_sweep(screen)
-
-    # Draw persistent blips from previous sweeps
     radar.draw_blips(screen)
 
     # Update display
