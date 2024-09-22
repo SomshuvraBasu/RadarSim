@@ -50,11 +50,8 @@ while running:
     # Update radar sweep angle
     radar.update_sweep()
 
-    # Detect targets within the current beam
-    radar.detect_targets(targets)
-
-    # Update blips if a full sweep is completed
-    radar.update_blips()
+    # Detect targets and update blips within the current beam
+    radar.detect_and_update_targets(targets)
 
     # Draw radar elements
     radar.draw_radar(screen)

@@ -15,11 +15,9 @@ class Radar:
         self.trail_surface = pygame.Surface((800, 800), pygame.SRCALPHA)
         
         # Dictionary to store current blips
-        self.current_blips = {}
-        # Dictionary to store new blips detected in the ongoing sweep
-        self.new_blips = {}
-        # Flag to indicate if a full sweep has been completed
-        self.sweep_completed = False
+        self.blips = {}
+        # Set to keep track of angles that have been swept in the current cycle
+        self.swept_angles = set()
 
     def calculate_response(self, target_position, rcs):
         """Calculate the received power from a target."""
@@ -43,31 +41,41 @@ class Radar:
         else:
             return target_angle >= beam_start_angle or target_angle <= beam_end_angle
 
-    def detect_targets(self, targets):
-        """Detect targets within the current beam."""
+    def detect_and_update_targets(self, targets):
+        """Detect targets within the current beam and update blips immediately."""
+        # Determine the range of angles covered by this sweep
+        start_angle = (self.angle - self.beamwidth / 2) % 360
+        end_angle = (self.angle + self.beamwidth / 2) % 360
+
+        # Add these angles to the swept angles set
+        for angle in range(int(start_angle), int(end_angle) + 1):
+            self.swept_angles.add(angle % 360)
+
+        # Check for targets within the beam
+        detected_positions = set()
         for target in targets:
-            target_position = tuple(map(int, target['position']))  # Convert to integer tuple for precise positioning
+            target_position = tuple(map(int, target['position']))
             rcs = target['rcs']
 
             if self.is_within_beam(target_position):
                 power_received, _ = self.calculate_response(target_position, rcs)
-
                 if power_received > 0:
-                    self.new_blips[target_position] = rcs
+                    self.blips[target_position] = rcs
+                    detected_positions.add(target_position)
+
+        # Remove blips that are within the current sweep but not detected
+        for position in list(self.blips.keys()):
+            blip_angle = math.degrees(math.atan2(position[1] - self.center[1], position[0] - self.center[0])) % 360
+            if self.is_within_beam(position) and position not in detected_positions:
+                del self.blips[position]
+
+        # Check if a full sweep has been completed
+        if len(self.swept_angles) == 360:
+            self.swept_angles.clear()  # Reset for the next sweep
 
     def update_sweep(self):
-        """Updates the radar sweep angle and checks for sweep completion."""
-        self.angle += self.sweep_speed
-        if self.angle >= 360:
-            self.angle = 0
-            self.sweep_completed = True
-
-    def update_blips(self):
-        """Update blips after a full sweep."""
-        if self.sweep_completed:
-            self.current_blips = self.new_blips
-            self.new_blips = {}
-            self.sweep_completed = False
+        """Updates the radar sweep angle."""
+        self.angle = (self.angle + self.sweep_speed) % 360
 
     def draw_radar(self, screen):
         """Draws the radar background with concentric circles and radial lines."""
@@ -117,7 +125,7 @@ class Radar:
 
     def draw_blips(self, screen):
         """Draws the current blips on the screen."""
-        for position, rcs in self.current_blips.items():
+        for position, rcs in self.blips.items():
             # Normalize RCS for blip size (adjust as needed)
             blip_size = max(3, min(10, int(rcs)))
             pygame.draw.circle(screen, (255, 255, 0), position, blip_size)
