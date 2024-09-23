@@ -137,9 +137,9 @@ class Radar:
             blip_color = (0, 255, 0)  # Green
             
             # Draw subtle halo
-            halo_size = blip_size + 4  # Just slightly larger than the blip
+            halo_size = blip_size+6  # Just slightly larger than the blip
             halo_surface = pygame.Surface((halo_size*2, halo_size*2), pygame.SRCALPHA)
-            pygame.draw.circle(halo_surface, (*blip_color, 100), (halo_size, halo_size), halo_size)  # Adjust alpha (100) for halo intensity
+            pygame.draw.circle(halo_surface, (*blip_color, 75), (halo_size, halo_size), halo_size)  # Adjust halo_alpha (75) for halo intensity
             screen.blit(halo_surface, (position[0]-halo_size, position[1]-halo_size))
             
             # Draw main blip
