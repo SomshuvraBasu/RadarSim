@@ -131,28 +131,28 @@ class Radar:
         screen.blit(self.trail_surface, (0, 0))
 
     def draw_blips(self, screen):
-        """Draws the current blips on the screen."""
+        """Draws the current blips on the screen with a halo effect."""
         for position, (power, snr) in self.blips.items():
-            # Use power to determine blip size
-            # You might want to adjust this calculation based on your specific needs
-            
             blip_size = max(6, min(12, int(power*1e18 / self.pt)))  # Normalize by transmit power
+            blip_color = (0, 255, 0)  # Green
             
-            # # Use SNR to determine blip color
-            # color_value = abs(255-max(0, min(255, 128+int((snr-100)*3))))  # Adjust these values as needed
-            # blip_color = (255, color_value, 0)  # Red to Yellow
-
-            blip_color = (0, 255, 0)  # Yellow
+            # Draw subtle halo
+            halo_size = blip_size + 4  # Just slightly larger than the blip
+            halo_surface = pygame.Surface((halo_size*2, halo_size*2), pygame.SRCALPHA)
+            pygame.draw.circle(halo_surface, (*blip_color, 100), (halo_size, halo_size), halo_size)  # Adjust alpha (100) for halo intensity
+            screen.blit(halo_surface, (position[0]-halo_size, position[1]-halo_size))
             
+            # Draw main blip
             pygame.draw.circle(screen, blip_color, position, blip_size)
-            #add text to show distance
+            
+            # Add text to show distance
             distance = pygame.font.SysFont(None, 24).render(str(int(math.sqrt((position[0] - self.center[0])**2 + (position[1] - self.center[1])**2))), True, (0, 255, 0))
             screen.blit(distance, (position[0], position[1] + 15))
 
-            # Use this to display target type in future by implementing a target classifcation algorithm
+            # Display target type
             if(blip_size > 9):
                 type_of_target = pygame.font.SysFont(None, 24).render("Ship", True, (0, 255, 0))
-                screen.blit(type_of_target, (position[0]+10, position[1] - 15))
+                screen.blit(type_of_target, (position[0]+15, position[1] - 15))
             else:
                 type_of_target = pygame.font.SysFont(None, 24).render("A/C", True, (0, 255, 0))
-                screen.blit(type_of_target, (position[0]+10, position[1] - 15))
+                screen.blit(type_of_target, (position[0]+15, position[1] - 15))
