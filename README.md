@@ -3,6 +3,8 @@
 ## Description
 This project is a Python-based radar simulation that visualizes the operation of a sweeping radar system. It demonstrates the principles of radar detection, target tracking, and blip visualization in a dynamic, real-time environment. Implements realistic physics-based radar simulation with realistic target movement and detection.
 
+https://github.com/user-attachments/assets/7e2bc9dd-b9da-41e0-b07a-7979d11aeb3f
+
 ## Features
 - Realistic radar sweep simulation
 - Dynamic target movement and detection
