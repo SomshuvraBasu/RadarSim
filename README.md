@@ -19,7 +19,7 @@ https://github.com/user-attachments/assets/7e2bc9dd-b9da-41e0-b07a-7979d11aeb3f
 ## Installation
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/radar-simulation.git
+   git clone https://github.com/SomshuvraBasu/RadarSim
    ```
 2. Install the required dependencies:
    ```
@@ -45,9 +45,6 @@ You can adjust various parameters in the simulation:
 
 ## Contributing
 Contributions to improve the simulation or add new features are welcome. Please fork the repository and create a pull request with your changes.
-
-## License
-[MIT License](https://opensource.org/licenses/MIT)
 
 ## Contact
 For any questions or suggestions, please open an issue in the GitHub repository.
